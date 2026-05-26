@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BESS Deal Game · E.ON Energy Markets</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f0efec;color:#1a1a1a;min-height:100vh;display:flex;justify-content:center}
+#app{width:100%;max-width:480px;min-height:100vh;background:#fff}
+
+h1{font-size:22px;font-weight:700;line-height:1.2;margin-bottom:.5rem}
+h2{font-size:18px;font-weight:700;line-height:1.3;margin-bottom:.375rem}
+p{font-size:14px;color:#555;line-height:1.7}
+.label{font-size:11px;font-weight:700;letter-spacing:.07em;color:#999;text-transform:uppercase;margin-bottom:.5rem;display:block}
+.mono{font-family:'SF Mono',Monaco,monospace}
+.pad{padding:1.5rem 1.25rem}
+
+.scene{background:#1c1c1e;color:#fff;padding:1.25rem;border-radius:14px;margin-bottom:1.25rem;position:relative;overflow:hidden}
+.scene::after{content:'';position:absolute;bottom:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.04)}
+.scene-tag{font-size:10px;font-weight:700;letter-spacing:.1em;color:#666;margin-bottom:.625rem;display:block}
+.scene-text{font-size:13px;line-height:1.8;color:#d4d4d4;white-space:pre-line}
+
+.progress-row{display:flex;align-items:center;gap:8px;margin-bottom:1.25rem}
+.progress-pip{height:4px;border-radius:2px;flex:1;background:#f0f0f0;transition:background .25s}
+.progress-pip.done{background:#1a1a1a}
+.progress-pip.active{background:#BA7517}
+.step-label{font-size:12px;color:#999;white-space:nowrap}
+
+.opt{width:100%;padding:14px;background:#fff;border:1.5px solid #e8e8e8;border-radius:14px;text-align:left;display:flex;gap:12px;align-items:flex-start;cursor:pointer;margin-bottom:.625rem;transition:border-color .12s,background .12s}
+.opt:hover{border-color:#bbb}
+.opt.on{border-width:2.5px;background:#fafafa}
+.opt-icon{font-size:22px;flex-shrink:0;margin-top:1px}
+.opt-title{font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:3px}
+.opt-sub{font-size:12px;color:#666;margin-bottom:2px}
+.opt-risk{font-size:11px;color:#c0392b}
+.opt-check{font-size:20px;flex-shrink:0;align-self:center;margin-left:auto}
+
+button{font-family:inherit;cursor:pointer;border:none;outline:none}
+.btn{width:100%;padding:15px;font-size:15px;font-weight:700;border-radius:14px;transition:opacity .15s,transform .1s}
+.btn:active{transform:scale(.98)}
+.btn-dark{background:#1a1a1a;color:#fff}
+.btn-dark:hover{background:#333}
+.btn-dark:disabled{background:#ccc;cursor:not-allowed;transform:none}
+.btn-ghost{background:#f5f5f5;color:#1a1a1a;border:1.5px solid #e8e8e8}
+.btn-ghost:hover{background:#ebebeb}
+
+.card{background:#f7f6f2;border-radius:14px;padding:1rem 1.125rem;margin-bottom:.875rem}
+.card-line{background:#fff;border:1.5px solid #e8e8e8;border-radius:12px;padding:.875rem 1rem;margin-bottom:.625rem}
+.card-line.winner{border-width:2.5px}
+
+.irr-hero{border-radius:16px;padding:1.5rem;text-align:center;margin-bottom:1.25rem}
+.irr-hero.above{background:#e8f5ee}
+.irr-hero.below{background:#fdf0f0}
+.irr-big{font-size:56px;font-weight:900;line-height:1;margin-bottom:.25rem}
+.irr-big.above{color:#0a7c5c}
+.irr-big.below{color:#c0392b}
+.irr-verdict{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:.25rem}
+.irr-verdict.above{color:#0a7c5c}
+.irr-verdict.below{color:#c0392b}
+
+.dot{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;flex-shrink:0}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.badge-win{background:#FAC775;color:#412402}
+.badge-above{background:#e8f5ee;color:#0a7c5c}
+.badge-below{background:#fdf0f0;color:#c0392b}
+
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fade{animation:fadein .22s ease}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.pulse{animation:blink 1.6s ease-in-out infinite}
+
+#qr-wrap{background:#fff;border:1.5px solid #e8e8e8;border-radius:10px;padding:6px;display:inline-block;line-height:0}
+input{width:100%;box-sizing:border-box;padding:12px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
+input:focus{border-color:#1a1a1a}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const {useState,useEffect,useRef}=React;
+const h=React.createElement;
+const TC=['#1D9E75','#2176AE','#BA7517','#C0392B','#6C3FB5','#C25B7A'];
+const HURDLE=8.4;
+const ASSET='20MW / 40MWh · Germany · COD June 2027 · 15yr tenor';
+
+// ─── Contracts ────────────────────────────────────────────────────────────────
+const CD={
+  A:{name:'Fixed internal tolling',tag:'Tolling',icon:'🔒',col:'#2176AE',
+    desc:'EEM pays EIS a fixed annual fee per MW and keeps 100% of all trading upside above that fee. EIS has zero market exposure.',
+    risk:'Fee is owed unconditionally — if the market collapses, EEM still pays.',
+    scene2:`EIS nods. Fixed tolling works for them — certainty is what their investors need. Now they want a number.\n\n"What annual fee per MW is EEM committing to?" their CFO asks, sliding a blank term sheet across the table.\n\nThe fee is EEM's guaranteed cost base for 15 years. Too low and EIS walks. Too high and EEM's IRR suffers regardless of how well the asset performs.`,
+    q2:'What annual fee does EEM offer EIS per MW?',
+    params:[
+      {id:'100k',label:'€100k / MW / yr',sub:'€2.0M / yr total · aggressive — tight margin for EIS'},
+      {id:'120k',label:'€120k / MW / yr',sub:'€2.4M / yr total · market standard, balanced terms'},
+      {id:'140k',label:'€140k / MW / yr',sub:'€2.8M / yr total · premium — deal-certain, EIS signs today'}
+    ]},
+  B:{name:'Floor + revenue share',tag:'Floor + Share',icon:'⚖️',col:'#1D9E75',
+    desc:'EIS receives a guaranteed minimum floor of €100k/MW/yr. EEM negotiates the share of revenues above that floor. EEM absorbs any shortfall below it.',
+    risk:'Below the floor, EEM is fully on the hook. Shortfall comes straight out of EEM\'s P&L.',
+    scene2:`"A floor works for us," EIS says. "But we want participation in the upside — that's how we compensate for accepting lower certainty."\n\nThe floor is fixed: €100k/MW/yr (€2.0M/yr total). EEM absorbs any revenue shortfall below this. In exchange, you negotiate what share of revenues above the floor EEM retains.\n\nThe more EEM keeps, the harder the negotiation — and the bigger the swing in good markets.`,
+    q2:'What share of revenues above the floor does EEM keep?',
+    params:[
+      {id:'50',label:'50% rev share above floor',sub:'Conservative split — EEM keeps half the upside'},
+      {id:'70',label:'70% rev share above floor',sub:'Balanced — EEM retains most of the upside'},
+      {id:'90',label:'90% rev share above floor',sub:'Aggressive — EEM keeps nearly all upside above floor'}
+    ]},
+  C:{name:'Full merchant rev share',tag:'Merchant',icon:'⚡',col:'#BA7517',
+    desc:'No floors. No guarantees. EEM captures all market revenues and splits them with EIS at a pre-agreed ratio. Both parties ride the market together — upside and downside.',
+    risk:'Pure market exposure for both sides. No protection for EEM or EIS when markets turn.',
+    scene2:`EIS pauses. "No floor, no guarantees — you're asking us to ride the market with you."\n\nA long silence. Then: "We can live with that if the split reflects the risk we're taking."\n\nThis is the cleanest structure. Whatever EEM generates — FCR, aFRR, arbitrage — it gets split immediately at the ratio you set now. EIS wins when EEM wins. When the market turns, neither party is protected.\n\nName EEM's share.`,
+    q2:'What share of all revenues does EEM retain?',
+    params:[
+      {id:'60',label:'60% EEM / 40% EIS',sub:'Balanced — EIS retains meaningful participation in all upside'},
+      {id:'70',label:'70% EEM / 30% EIS',sub:'EEM-favouring — market standard for asset optimisers'},
+      {id:'80',label:'80% EEM / 20% EIS',sub:'Aggressive — EEM captures the vast majority of P&L'}
+    ]}
+};
+
+// ─── Dispatch ─────────────────────────────────────────────────────────────────
+const DD={
+  FCR:{label:'FCR-first',icon:'〰️',col:'#2176AE',
+    sub:'Primary frequency response · stable daily auctions, lower volatility',
+    risk:'Exposed if FCR prices compress; insulated from aFRR regulatory risk'},
+  aFRR:{label:'aFRR-first',icon:'📡',col:'#1D9E75',
+    sub:'Automatic frequency restoration · higher revenues, more operationally complex',
+    risk:'Highly vulnerable to any aFRR regulatory changes or access restrictions'},
+  Arbitrage:{label:'Arbitrage-first',icon:'📈',col:'#BA7517',
+    sub:'DA/ID price spread trading · highest ceiling, fully market-dependent',
+    risk:'Maximum exposure to wholesale market volatility and capacity gluts'}
+};
+
+// ─── Scenarios ────────────────────────────────────────────────────────────────
+const SC=[
+  {id:'bull',emoji:'📈',accent:'#1D9E75',rtype:'Market dynamics — upside',
+   title:'The bull run',headline:'Revenues 40% above forecast',
+   detail:'Grid volatility surged as renewable penetration hit record levels. FCR auctions tightened, aFRR demand spiked, and day-ahead spreads widened materially. The German BESS market delivered exceptional returns across all revenue stacks in the first five years.',
+   takeaway:'Your contract structure determined how much of the upside EEM captured. Merchant players took the full run. Fixed tolling teams made money — but their ceiling was locked in from day one.',
+   optimal:'Best position: Contract C (80% EEM share) + Arbitrage-first + full market exposure.'},
+  {id:'crash',emoji:'📉',accent:'#C0392B',rtype:'Market dynamics — downside',
+   title:'The market shock',headline:'Revenues 45% below forecast — FCR cannibalism',
+   detail:'Over 1.2GW of new BESS capacity entered Germany in 18 months. FCR prices collapsed 40%. aFRR and DA/ID spreads compressed sharply. By Year 3, the revenue stack looked nothing like the base case. Projects commissioned in 2027 bore the worst of the saturation.',
+   takeaway:'EEM bears market risk as the optimiser in all contracts. But structure determines how much of the EIS obligation remains when revenues collapse. Fixed tolling at low fee capped the damage.',
+   optimal:'Best position: Contract A (€100k fee) + FCR-first + market protection clause.'},
+  {id:'delay',emoji:'⏳',accent:'#BA7517',rtype:'Build risk',
+   title:'The build delay',headline:'COD pushed 12 months to June 2028',
+   detail:'Grid connection permitting ran over by 12 months — a TSO queue issue affecting multiple projects across Bavaria. EIS absorbed the construction cost overrun. But EEM lost Year 1 of a 15-year declining revenue curve. The first year was the most valuable.',
+   takeaway:'Build risk sits with EIS on paper. But for EEM, Year 1 on a declining 15yr curve is the most valuable year. Strategies with high Year 1 revenue expectations felt the delay most acutely.',
+   optimal:'Best position: Contract A or B + any dispatch + market protection (delays trigger the shared risk clause).'},
+  {id:'policy',emoji:'⚖️',accent:'#6C3FB5',rtype:'Policy change',
+   title:'The regulatory shock',headline:'BNetzA caps aFRR access for standalone BESS',
+   detail:'A new ruling restricted aFRR market participation for standalone BESS assets without a signed network service agreement with the TSO. Most 2027-vintage assets were locked out of aFRR for two years. FCR was unaffected. Arbitrage took collateral damage from intraday liquidity rule changes.',
+   takeaway:'Policy risk hits EEM as the licenced market participant. Fixed tolling teams still owe EIS their fee — now with reduced revenues to cover it. aFRR-heavy strategies took the hardest hit.',
+   optimal:'Best position: Contract C (Merchant) + FCR-first + market protection (policy shock counts as a shared risk event).'}
+];
+
+// ─── IRR model ────────────────────────────────────────────────────────────────
+const BASE_IRR={
+  A:{'100k':14.5,'120k':11.2,'140k':8.3},
+  B:{'50':10.8,'70':13.5,'90':16.2},
+  C:{'60':12.0,'70':15.5,'80':19.0}
+};
+const SMULT={
+  bull:  {A:{'100k':1.40,'120k':1.38,'140k':1.35},B:{'50':1.45,'70':1.43,'90':1.41},C:{'60':1.50,'70':1.52,'80':1.55}},
+  crash: {A:{'100k':0.42,'120k':0.30,'140k':0.15},B:{'50':0.55,'70':0.50,'90':0.44},C:{'60':0.65,'70':0.60,'80':0.55}},
+  delay: {A:{'100k':0.72,'120k':0.75,'140k':0.78},B:{'50':0.74,'70':0.74,'90':0.74},C:{'60':0.70,'70':0.70,'80':0.80}},
+  policy:{A:{'100k':0.80,'120k':0.78,'140k':0.76},B:{'50':0.75,'70':0.75,'90':0.75},C:{'60':0.82,'70':0.82,'80':0.82}}
+};
+const DADJ={
+  FCR:       {bull:0.5, crash:1.5, delay:0.3,policy:1.2},
+  aFRR:      {bull:1.5, crash:-0.5,delay:0.3,policy:-4.0},
+  Arbitrage: {bull:2.5, crash:-1.0,delay:0.3,policy:-1.5}
+};
+const RADJ={
+  accept: {bull:-1.5,crash:3.0,delay:0.8,policy:1.5},
+  decline:{bull:0.5, crash:-0.5,delay:-0.3,policy:-0.2}
+};
+function calcIRR(contract,terms,dispatch,risk,sid){
+  const b=BASE_IRR[contract]?.[terms]??10;
+  const m=SMULT[sid]?.[contract]?.[terms]??1;
+  const d=DADJ[dispatch]?.[sid]??0;
+  const r=RADJ[risk]?.[sid]??0;
+  return Math.round((b*m+d+r)*10)/10;
+}
+
+// ─── Storage ──────────────────────────────────────────────────────────────────
+const sk=g=>`bessv9_${g}`;
+async function rg(code){try{const r=await window.storage.get(sk(code),true);return r?JSON.parse(r.value):null}catch{return null}}
+async function wg(code,s){try{await window.storage.set(sk(code),JSON.stringify(s),true);return true}catch{return false}}
+const genCode=()=>{const c='ABCDEFHJKLMNPQRSTUVWXY3456789';return Array.from({length:4},()=>c[Math.floor(Math.random()*c.length)]).join('')};
+const genId=()=>Math.random().toString(36).substr(2,10);
+
+// ─── Shared UI ────────────────────────────────────────────────────────────────
+function Dot({color,size=28,name}){
+  return h('div',{className:'dot',style:{width:size,height:size,background:color,fontSize:size*.36}},name[0].toUpperCase())
+}
+function QRBox({content,size=130}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!ref.current||!content||!window.QRCode)return;
+    ref.current.innerHTML='';
+    try{new window.QRCode(ref.current,{text:content,width:size,height:size,colorDark:'#111',colorLight:'#fff'})}catch(e){}
+  },[content,size]);
+  return h('div',{id:'qr-wrap',ref});
+}
+function Scene({tag,text}){
+  return h('div',{className:'scene'},h('span',{className:'scene-tag'},tag),h('div',{className:'scene-text'},text))
+}
+function ProgressBar({step}){
+  return h('div',{className:'progress-row'},
+    Array.from({length:4},(_,i)=>h('div',{key:i,className:'progress-pip'+(i<step?' done':i===step?' active':'')})),
+    h('span',{className:'step-label'},`Step ${step+1} of 4`)
+  )
+}
+
+// ─── HOST ─────────────────────────────────────────────────────────────────────
+function HostLobby({code,teams,onStart}){
+  const base=(()=>{try{const u=window.location.href;return u.startsWith('http')?u.split('#')[0]:''}catch{return''}})();
+  const [custom,setCustom]=useState('');
+  const eff=base||custom.trim();
+  const qr=eff?`${eff}#${code}`:`BESS Game Code: ${code}`;
+  return h('div',{className:'pad fade'},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.5rem'}},
+      h('div',null,h('span',{className:'label'},'HOST · BESS DEAL GAME'),h('h2',null,'Waiting for teams')),
+      h('div',{style:{textAlign:'right'}},
+        h('span',{className:'label'},'CODE'),
+        h('div',{className:'mono',style:{fontSize:42,fontWeight:900,letterSpacing:'.2em',lineHeight:1}},code)
+      )
+    ),
+    h('div',{style:{display:'flex',gap:14,alignItems:'flex-start',marginBottom:'1rem'}},
+      h(QRBox,{content:qr,size:130}),
+      h('div',null,
+        h('p',{style:{fontWeight:700,fontSize:14,color:'#1a1a1a',marginBottom:8}},'Scan to join'),
+        h('ol',{style:{paddingLeft:16,fontSize:13,color:'#666',lineHeight:2.3,margin:0}},
+          h('li',null,'Scan QR or open this link'),
+          h('li',null,'Tap "Join as player"'),
+          h('li',null,'Enter code + team name'),
+          h('li',null,'Complete 4 decisions')
+        )
+      )
+    ),
+    !base&&h('div',{style:{marginBottom:'1rem'}},
+      h('span',{className:'label'},'PASTE THIS PAGE URL FOR DEEP-LINK QR'),
+      h('input',{value:custom,onChange:e=>setCustom(e.target.value),placeholder:'https://...',style:{fontSize:12}})
+    ),
+    h('div',{className:'card'},
+      h('span',{className:'label'},'THE ASSET'),
+      h('div',{style:{fontWeight:700,fontSize:13,marginBottom:2}},ASSET),
+      h('p',{style:{fontSize:12}},`Teams negotiate as EEM · EIS owns the asset · EEM hurdle rate: ${HURDLE}%`)
+    ),
+    h('div',{style:{marginBottom:'1.5rem'}},
+      h('span',{className:'label'},`TEAMS JOINED (${teams.length})`),
+      teams.length===0
+        ?h('p',{style:{fontStyle:'italic',fontSize:14}},'No teams yet — share the code or QR')
+        :teams.map((t,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid #f0f0f0'}},
+            h(Dot,{color:TC[i%6],size:28,name:t.name}),
+            h('span',{style:{fontSize:14,fontWeight:600}},t.name)
+          ))
+    ),
+    h('button',{className:'btn btn-dark',onClick:onStart,disabled:teams.length<1,style:{opacity:teams.length>=1?1:.3}},
+      teams.length===0?'Waiting for players...':`Start — ${teams.length} team${teams.length!==1?'s':''} ready ↗`)
+  )
+}
+
+function HostDecisions({code,teams,onReveal}){
+  const allLocked=teams.length>0&&teams.every(t=>t.locked);
+  return h('div',{className:'pad fade'},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}},
+      h('div',null,h('span',{className:'label'},'HOST · BESS DEAL GAME'),h('h2',null,'Teams negotiating...')),
+      h('div',{style:{textAlign:'right'}},h('span',{className:'label'},'CODE'),h('div',{className:'mono',style:{fontSize:28,fontWeight:900,letterSpacing:'.16em'}},code))
+    ),
+    teams.map((t,i)=>h('div',{key:i,style:{
+      display:'flex',alignItems:'center',justifyContent:'space-between',
+      padding:'14px',marginBottom:8,background:'#fff',
+      border:t.locked?`2.5px solid ${TC[i%6]}`:'1.5px solid #e8e8e8',borderRadius:14
+    }},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10}},
+        h(Dot,{color:TC[i%6],size:30,name:t.name}),
+        h('span',{style:{fontSize:14,fontWeight:700}},t.name)
+      ),
+      t.locked
+        ?h('span',{className:'badge badge-above'},'All decisions in ✓')
+        :h('div',{style:{display:'flex',alignItems:'center',gap:6}},
+            h('span',{className:'pulse',style:{width:8,height:8,borderRadius:'50%',background:'#BA7517',display:'inline-block'}}),
+            h('span',{style:{fontSize:12,color:'#aaa'}},'Negotiating...')
+          )
+    )),
+    h('div',{style:{marginTop:'1.5rem'}},
+      allLocked
+        ?h('button',{className:'btn btn-dark',onClick:onReveal},'Reveal the scenario ↗')
+        :h('div',null,
+            h('p',{style:{textAlign:'center',marginBottom:12}},'Waiting for all teams to submit...'),
+            h('button',{className:'btn btn-ghost',onClick:onReveal,style:{opacity:.4}},'Force reveal ↗')
+          )
+    )
+  )
+}
+
+function HostScores({gs,onNewGame}){
+  const sc=gs.scenario;
+  const teams=Object.values(gs.teams).map((t,i)=>({...t,ci:i,irr:calcIRR(t.contract,t.terms,t.dispatch,t.risk,sc.id)})).sort((a,b)=>b.irr-a.irr);
+  return h('div',{className:'pad fade'},
+    h('div',{style:{border:`2.5px solid ${sc.accent}`,borderRadius:16,padding:'1.25rem',marginBottom:'1.25rem',background:sc.accent+'0d'}},
+      h('div',{style:{fontSize:32,marginBottom:6}},sc.emoji),
+      h('span',{className:'label',style:{color:sc.accent,display:'block',marginBottom:4}},sc.rtype),
+      h('h2',null,sc.title),
+      h('div',{style:{fontSize:14,fontWeight:700,margin:'4px 0 8px'}},sc.headline),
+      h('p',{style:{fontSize:12,marginBottom:8}},sc.detail),
+      h('div',{style:{borderTop:'1px solid '+sc.accent+'44',paddingTop:8}},h('p',{style:{fontSize:12}},sc.takeaway))
+    ),
+    h('span',{className:'label'},'TEAM RESULTS — IRR vs '+HURDLE+'% HURDLE'),
+    teams.map((t,rank)=>{
+      const above=t.irr>=HURDLE;const isW=rank===0;
+      const cdef=CD[t.contract];const pdef=cdef?.params.find(p=>p.id===t.terms);
+      return h('div',{key:t.name+rank,className:'card-line'+(isW?' winner':''),style:{borderColor:isW?TC[t.ci%6]:'#e8e8e8'}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:8}},
+            h('span',{style:{fontSize:12,color:'#bbb',width:16}},`${rank+1}.`),
+            h(Dot,{color:TC[t.ci%6],size:28,name:t.name}),
+            h('span',{style:{fontSize:14,fontWeight:700}},t.name),
+            isW&&h('span',{className:'badge badge-win',style:{marginLeft:4}},'Winner 🏆')
+          ),
+          h('div',{style:{textAlign:'right'}},
+            h('div',{style:{fontSize:22,fontWeight:900,color:above?'#0a7c5c':'#c0392b'}},`${t.irr}%`),
+            h('div',{style:{fontSize:11,fontWeight:700,color:above?'#0a7c5c':'#c0392b'}},
+              above?`+${(t.irr-HURDLE).toFixed(1)}% vs hurdle`:`${(t.irr-HURDLE).toFixed(1)}% vs hurdle`
+            )
+          )
+        ),
+        h('div',{style:{display:'flex',gap:5,flexWrap:'wrap'}},
+          cdef&&h('span',{className:'badge',style:{background:cdef.col+'18',color:cdef.col}},cdef.tag),
+          pdef&&h('span',{className:'badge',style:{background:'#f0f0f0',color:'#555'}},pdef.label),
+          h('span',{className:'badge',style:{background:'#f0f0f0',color:'#555'}},DD[t.dispatch]?.label||t.dispatch),
+          h('span',{className:'badge',style:{background:t.risk==='accept'?'#e8f5ee':'#f0f0f0',color:t.risk==='accept'?'#0a7c5c':'#555'}},
+            t.risk==='accept'?'Protected':'Full exposure')
+        )
+      )
+    }),
+    h('div',{className:'card',style:{marginTop:'1rem'}},h('span',{className:'label'},'OPTIMAL PLAY'),h('p',{style:{fontSize:13}},sc.optimal)),
+    h('button',{className:'btn btn-ghost',onClick:onNewGame,style:{marginTop:'.75rem'}},'Start new game')
+  )
+}
+
+// ─── PLAYER ───────────────────────────────────────────────────────────────────
+function JoinScreen({code,setCode,name,setName,onJoin,err,loading}){
+  return h('div',{className:'pad fade'},
+    h('div',{style:{fontSize:44,marginBottom:'1rem'}},'⚡'),
+    h('h1',null,'Join the negotiation'),
+    h('p',{style:{marginBottom:'1.5rem'}},'Enter the 4-character code from the projector screen and your team name.'),
+    h('div',{style:{marginBottom:12}},
+      h('span',{className:'label'},'GAME CODE'),
+      h('input',{value:code,onChange:v=>setCode(v.target.value.toUpperCase().slice(0,4)),
+        placeholder:'e.g. BXKJ',maxLength:4,
+        style:{fontSize:28,letterSpacing:'.25em',textAlign:'center',fontFamily:'monospace',fontWeight:900}})
+    ),
+    h('div',{style:{marginBottom:16}},
+      h('span',{className:'label'},'TEAM NAME'),
+      h('input',{value:name,onChange:v=>setName(v.target.value),placeholder:'e.g. North Star Capital'})
+    ),
+    err&&h('div',{style:{fontSize:13,color:'#c0392b',marginBottom:12,padding:'8px 12px',background:'#fdf0f0',borderRadius:8}},err),
+    h('button',{className:'btn btn-dark',onClick:onJoin,
+      disabled:loading||code.length<4||!name.trim(),
+      style:{opacity:(loading||code.length<4||!name.trim())?.3:1}},loading?'Joining...':'Join deal ↗')
+  )
+}
+
+function PlayerLobby({myName,teams}){
+  return h('div',{className:'pad fade',style:{textAlign:'center',paddingTop:'2.5rem'}},
+    h('div',{style:{fontSize:48,marginBottom:'1rem'}},'⏳'),
+    h('h2',null,`You're in${myName?`, ${myName}`:''}!`),
+    h('p',{style:{maxWidth:300,margin:'0 auto 2rem'}},'Waiting for the host to open the negotiation room.'),
+    h('div',{style:{textAlign:'left'}},
+      h('span',{className:'label'},`TEAMS IN LOBBY (${teams.length})`),
+      teams.map((t,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid #f0f0f0',fontSize:14}},
+        h(Dot,{color:TC[i%6],size:26,name:t.name}),t.name
+      ))
+    )
+  )
+}
+
+function Step1({dec,setDec,onNext}){
+  const sel=dec.contract;
+  return h('div',{className:'pad fade'},
+    h(ProgressBar,{step:0}),
+    h(Scene,{tag:'OPENING · Q4 2026',
+      text:`EIS — a leading European battery developer — approaches E.ON Energy Markets with a proposal: a fully consented 20MW/40MWh standalone BESS in Southern Germany, commissioning June 2027. They need a commercial partner for 15 years.
+
+You sit across the table as EEM's lead negotiator. "We're open on structure," says EIS's commercial director, "but we need certainty from E.ON."
+
+Your decision today locks in EEM's commercial position until 2042.`}),
+    h('span',{className:'label',style:{marginBottom:10,display:'block'}},'STEP 1 · CHOOSE YOUR CONTRACT STRUCTURE'),
+    Object.entries(CD).map(([cId,def])=>{
+      const isSel=sel===cId;
+      return h('button',{key:cId,onClick:()=>setDec(p=>({...p,contract:cId,terms:null})),
+        className:'opt'+(isSel?' on':''),style:{borderColor:isSel?def.col:'#e8e8e8',borderWidth:isSel?2.5:1.5,alignItems:'flex-start'}},
+        h('div',{className:'opt-icon'},def.icon),
+        h('div',{style:{flex:1}},
+          h('div',{className:'opt-title'},`Contract ${cId} — ${def.name}`),
+          h('div',{className:'opt-sub'},def.desc),
+          h('div',{className:'opt-risk'},`Risk: ${def.risk}`)
+        ),
+        isSel&&h('div',{className:'opt-check',style:{color:def.col}},'✓')
+      )
+    }),
+    h('button',{className:'btn btn-dark',onClick:onNext,disabled:!sel,style:{marginTop:'1.25rem',opacity:sel?1:.3}},'Next: Commercial terms →')
+  )
+}
+
+function Step2({dec,setDec,onNext}){
+  const cDef=CD[dec.contract];if(!cDef)return null;
+  const sel=dec.terms;
+  return h('div',{className:'pad fade'},
+    h(ProgressBar,{step:1}),
+    h(Scene,{tag:`STEP 2 · ${cDef.tag.toUpperCase()} NEGOTIATION`,text:cDef.scene2}),
+    h('span',{className:'label',style:{marginBottom:10,display:'block'}},cDef.q2.toUpperCase()),
+    cDef.params.map(p=>{
+      const isSel=sel===p.id;
+      return h('button',{key:p.id,onClick:()=>setDec(prev=>({...prev,terms:p.id})),
+        className:'opt'+(isSel?' on':''),style:{borderColor:isSel?cDef.col:'#e8e8e8',borderWidth:isSel?2.5:1.5,alignItems:'center'}},
+        h('div',{style:{flex:1}},
+          h('div',{className:'opt-title'},p.label),
+          h('div',{className:'opt-sub'},p.sub)
+        ),
+        isSel&&h('div',{className:'opt-check',style:{color:cDef.col}},'✓')
+      )
+    }),
+    h('button',{className:'btn btn-dark',onClick:onNext,disabled:!sel,style:{marginTop:'1.25rem',opacity:sel?1:.3}},'Next: Dispatch strategy →')
+  )
+}
+
+function Step3({dec,setDec,onNext}){
+  const sel=dec.dispatch;
+  return h('div',{className:'pad fade'},
+    h(ProgressBar,{step:2}),
+    h(Scene,{tag:'STEP 3 · JUNE 2027 — COMMISSIONING DAY',
+      text:`The asset commissions on schedule. 06:15 — first dispatch report lands on your desk as the battery goes live on the German grid for the first time.
+
+Germany's flexibility stack offers three primary revenue routes. Your choice determines EEM's market exposure — and which scenario will hit you hardest over the next 15 years.
+
+Your optimisation team is waiting. Where does EEM lead?`}),
+    h('span',{className:'label',style:{marginBottom:10,display:'block'}},'STEP 3 · CHOOSE YOUR PRIMARY DISPATCH MARKET'),
+    Object.entries(DD).map(([dId,def])=>{
+      const isSel=sel===dId;
+      return h('button',{key:dId,onClick:()=>setDec(p=>({...p,dispatch:dId})),
+        className:'opt'+(isSel?' on':''),style:{borderColor:isSel?def.col:'#e8e8e8',borderWidth:isSel?2.5:1.5,alignItems:'flex-start'}},
+        h('div',{className:'opt-icon'},def.icon),
+        h('div',{style:{flex:1}},
+          h('div',{className:'opt-title'},def.label),
+          h('div',{className:'opt-sub'},def.sub),
+          h('div',{className:'opt-risk'},def.risk)
+        ),
+        isSel&&h('div',{className:'opt-check',style:{color:def.col}},'✓')
+      )
+    }),
+    h('button',{className:'btn btn-dark',onClick:onNext,disabled:!sel,style:{marginTop:'1.25rem',opacity:sel?1:.3}},'Next: Final risk decision →')
+  )
+}
+
+function Step4({dec,setDec,onSubmit}){
+  const sel=dec.risk;
+  return h('div',{className:'pad fade'},
+    h(ProgressBar,{step:3}),
+    h(Scene,{tag:'STEP 4 · PRE-SIGNING — FINAL CLAUSE',
+      text:`Three months before final signing, EIS returns to the table with an unexpected proposal.
+
+"Our risk team is nervous about market saturation in years two through five," their director says. "We propose a shared risk clause: EIS absorbs 30% of any annual revenue shortfall below €2.5M — but in return takes 30% of any year EEM exceeds €4M in revenues."
+
+It limits both your ceiling and your floor. Your trading desk is split. The bulls say you're giving away value. The bears call it cheap insurance.`}),
+    h('span',{className:'label',style:{marginBottom:10,display:'block'}},'STEP 4 · DO YOU ACCEPT THE MARKET PROTECTION CLAUSE?'),
+    h('button',{onClick:()=>setDec(p=>({...p,risk:'accept'})),
+      className:'opt'+(sel==='accept'?' on':''),
+      style:{borderColor:sel==='accept'?'#0a7c5c':'#e8e8e8',borderWidth:sel==='accept'?2.5:1.5,alignItems:'flex-start',marginBottom:'.625rem'}},
+      h('div',{className:'opt-icon'},'🛡️'),
+      h('div',{style:{flex:1}},
+        h('div',{className:'opt-title'},'Accept — take the shared risk clause'),
+        h('div',{className:'opt-sub'},'EIS absorbs 30% of shortfall below €2.5M/yr. EEM gives up 30% of any year above €4M/yr.'),
+        h('div',{className:'opt-risk',style:{color:'#888'}},'Insurance in bad scenarios — costs you in a bull market.')
+      ),
+      sel==='accept'&&h('div',{className:'opt-check',style:{color:'#0a7c5c'}},'✓')
+    ),
+    h('button',{onClick:()=>setDec(p=>({...p,risk:'decline'})),
+      className:'opt'+(sel==='decline'?' on':''),
+      style:{borderColor:sel==='decline'?'#c0392b':'#e8e8e8',borderWidth:sel==='decline'?2.5:1.5,alignItems:'flex-start'}},
+      h('div',{className:'opt-icon'},'⚡'),
+      h('div',{style:{flex:1}},
+        h('div',{className:'opt-title'},'Decline — hold full market exposure'),
+        h('div',{className:'opt-sub'},'No shared risk. EEM keeps 100% of upside, bears 100% of downside.'),
+        h('div',{className:'opt-risk'},'Strongest in bull markets. Fully exposed in crashes and policy shocks.')
+      ),
+      sel==='decline'&&h('div',{className:'opt-check',style:{color:'#c0392b'}},'✓')
+    ),
+    h('button',{className:'btn btn-dark',onClick:onSubmit,disabled:!sel,style:{marginTop:'1.25rem',opacity:sel?1:.3}},'Submit all decisions ↗')
+  )
+}
+
+function PlayerWaiting({teams,dec}){
+  const locked=teams.filter(t=>t.locked).length;
+  const cdef=CD[dec.contract];const pdef=cdef?.params.find(p=>p.id===dec.terms);const ddef=DD[dec.dispatch];
+  return h('div',{className:'pad fade'},
+    h('div',{style:{fontSize:40,textAlign:'center',margin:'1rem 0'}},'🔒'),
+    h('h2',{style:{textAlign:'center',marginBottom:'.5rem'}},'Decisions submitted'),
+    h('p',{style:{textAlign:'center',marginBottom:'1.5rem'}},'Waiting for the host to reveal the scenario...'),
+    h('div',{className:'card',style:{marginBottom:'1.25rem'}},
+      h('span',{className:'label'},'YOUR DEAL STRUCTURE'),
+      cdef&&h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}},
+        h('span',{className:'badge',style:{background:cdef.col+'18',color:cdef.col}},`Contract ${dec.contract}`),
+        pdef&&h('span',{className:'badge',style:{background:'#f0f0f0',color:'#555'}},pdef.label),
+        ddef&&h('span',{className:'badge',style:{background:'#f0f0f0',color:'#555'}},ddef.label),
+        h('span',{className:'badge',style:{background:dec.risk==='accept'?'#e8f5ee':'#f0f0f0',color:dec.risk==='accept'?'#0a7c5c':'#555'}},
+          dec.risk==='accept'?'Protected':'Full exposure')
+      )
+    ),
+    h('span',{className:'label'},`TEAMS LOCKED (${locked}/${teams.length})`),
+    teams.map((t,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid #f5f5f5',fontSize:13}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Dot,{color:TC[i%6],size:24,name:t.name}),t.name),
+      t.locked?h('span',{style:{color:'#0a7c5c',fontWeight:700,fontSize:12}},'✓'):h('span',{className:'pulse',style:{width:8,height:8,borderRadius:'50%',background:'#BA7517',display:'inline-block'}})
+    ))
+  )
+}
+
+function PlayerScores({gs,myId}){
+  const sc=gs.scenario;
+  const teams=Object.entries(gs.teams).map(([id,t],i)=>({...t,id,ci:i,irr:calcIRR(t.contract,t.terms,t.dispatch,t.risk,sc.id)})).sort((a,b)=>b.irr-a.irr);
+  const me=teams.find(t=>t.id===myId);
+  const myIrr=me?.irr??0;const above=myIrr>=HURDLE;
+  return h('div',{className:'pad fade'},
+    h('div',{style:{border:`2.5px solid ${sc.accent}`,borderRadius:16,padding:'1.125rem',marginBottom:'1.25rem',background:sc.accent+'0d'}},
+      h('div',{style:{fontSize:28,marginBottom:4}},sc.emoji),
+      h('span',{className:'label',style:{color:sc.accent,display:'block',marginBottom:2}},sc.rtype),
+      h('h2',null,sc.title),
+      h('p',{style:{fontSize:12,marginTop:4,fontWeight:600}},sc.headline)
+    ),
+    me&&h('div',{className:`irr-hero ${above?'above':'below'}`},
+      h('span',{className:'label',style:{display:'block',marginBottom:8}},'YOUR DEAL IRR'),
+      h('div',{className:`irr-big ${above?'above':'below'}`},`${myIrr}%`),
+      h('div',{style:{fontSize:13,color:'#888',margin:'4px 0 6px'}},`EEM hurdle rate: ${HURDLE}%`),
+      h('div',{className:`irr-verdict ${above?'above':'below'}`},
+        above?'Above hurdle — deal approved ✓':'Below hurdle — value destructive ✗'
+      ),
+      h('div',{style:{fontSize:11,color:'#888',marginTop:4}},
+        `${above?'+':''}${(myIrr-HURDLE).toFixed(1)}% vs hurdle rate`
+      )
+    ),
+    h('span',{className:'label'},'ALL TEAMS'),
+    teams.map((t,rank)=>{
+      const isMe=t.id===myId;const a2=t.irr>=HURDLE;const isW=rank===0;
+      return h('div',{key:t.id,style:{
+        display:'flex',justifyContent:'space-between',alignItems:'center',
+        padding:'11px 12px',marginBottom:6,background:'#fff',
+        border:isW?`2.5px solid ${TC[t.ci%6]}`:'1.5px solid #e8e8e8',borderRadius:12
+      }},
+        h('div',{style:{display:'flex',alignItems:'center',gap:8}},
+          h('span',{style:{fontSize:12,color:'#ccc',width:16}},`${rank+1}.`),
+          h(Dot,{color:TC[t.ci%6],size:26,name:t.name}),
+          h('span',{style:{fontSize:14,fontWeight:isMe?700:500}},t.name),
+          isMe&&h('span',{className:'badge',style:{background:'#f0f0f0',color:'#888',marginLeft:4}},'you'),
+          isW&&h('span',{className:'badge badge-win',style:{marginLeft:4}},'🏆')
+        ),
+        h('span',{style:{fontSize:18,fontWeight:900,color:a2?'#0a7c5c':'#c0392b'}},`${t.irr}%`)
+      )
+    }),
+    h('div',{className:'card',style:{marginTop:'1rem'}},h('span',{className:'label'},'OPTIMAL PLAY'),h('p',{style:{fontSize:12}},sc.optimal))
+  )
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App(){
+  const initHash=(()=>{try{const h2=window.location.hash.slice(1).toUpperCase();return/^[A-Z0-9]{4}$/.test(h2)?h2:''}catch{return''}})();
+  const [screen,setScreen]=useState(initHash?'player_join':'welcome');
+  const [gameCode,setGameCode]=useState('');
+  const [codeIn,setCodeIn]=useState(initHash);
+  const [nameIn,setNameIn]=useState('');
+  const [myId]=useState(genId);
+  const [gs,setGs]=useState(null);
+  const [dec,setDec]=useState({contract:null,terms:null,dispatch:null,risk:null});
+  const [step,setStep]=useState(1);
+  const [submitted,setSubmitted]=useState(false);
+  const [joinErr,setJoinErr]=useState('');
+  const [joining,setJoining]=useState(false);
+  const pollRef=useRef(null);
+
+  useEffect(()=>{
+    if(!gameCode)return;
+    const run=async()=>{const s=await rg(gameCode);if(s)setGs(s)};
+    run();pollRef.current=setInterval(run,2500);
+    return()=>clearInterval(pollRef.current);
+  },[gameCode]);
+
+  const createGame=async()=>{
+    const code=genCode();
+    const s={code,phase:'lobby',scenario:null,createdAt:Date.now(),teams:{}};
+    wg(code,s);setGameCode(code);setGs(s);setScreen('host');
+  };
+
+  const joinGame=async()=>{
+    const code=codeIn.toUpperCase().trim();
+    if(code.length!==4){setJoinErr('Enter a 4-character code');return}
+    if(!nameIn.trim()){setJoinErr('Enter your team name');return}
+    setJoining(true);setJoinErr('');
+    const s=await rg(code);
+    if(!s){setJoinErr('Game not found — check the code');setJoining(false);return}
+    if(s.phase!=='lobby'){setJoinErr('Game already in progress');setJoining(false);return}
+    const up={...s,teams:{...s.teams,[myId]:{name:nameIn.trim(),joined:Date.now(),locked:false,contract:null,terms:null,dispatch:null,risk:null}}};
+    await wg(code,up);setGameCode(code);setGs(up);setScreen('player');setJoining(false);
+  };
+
+  const startGame=()=>{const up={...gs,phase:'decisions'};wg(gameCode,up);setGs(up)};
+  const revealScenario=()=>{
+    const sc=SC[Math.floor(Math.random()*SC.length)];
+    const up={...gs,phase:'scores',scenario:sc};wg(gameCode,up);setGs(up);
+  };
+
+  const nextStep=()=>setStep(p=>p+1);
+
+  const submitDecisions=async()=>{
+    const latest=await rg(gameCode)||gs;
+    if(!latest)return;
+    const up={...latest,teams:{...latest.teams,[myId]:{...latest.teams[myId],...dec,locked:true}}};
+    await wg(gameCode,up);setGs(up);setSubmitted(true);
+  };
+
+  const reset=()=>{
+    setScreen('welcome');setGameCode('');setCodeIn('');setNameIn('');
+    setGs(null);setDec({contract:null,terms:null,dispatch:null,risk:null});
+    setStep(1);setSubmitted(false);setJoinErr('');
+  };
+
+  // Host routing
+  if(screen==='host'&&gs){
+    const teams=Object.values(gs.teams);
+    if(gs.phase==='lobby')return h(HostLobby,{code:gameCode,teams,onStart:startGame});
+    if(gs.phase==='decisions')return h(HostDecisions,{code:gameCode,teams,onReveal:revealScenario});
+    if(gs.phase==='scores')return h(HostScores,{gs,onNewGame:reset});
+  }
+
+  // Player routing
+  if(screen==='player'&&gs){
+    const myTeam=gs.teams[myId];const teams=Object.values(gs.teams);
+    if(gs.phase==='lobby')return h(PlayerLobby,{myName:myTeam?.name||nameIn,teams});
+    if(gs.phase==='decisions'&&!submitted){
+      if(step===1)return h(Step1,{dec,setDec,onNext:nextStep});
+      if(step===2)return h(Step2,{dec,setDec,onNext:nextStep});
+      if(step===3)return h(Step3,{dec,setDec,onNext:nextStep});
+      if(step===4)return h(Step4,{dec,setDec,onSubmit:submitDecisions});
+    }
+    if(gs.phase==='decisions'&&submitted)return h(PlayerWaiting,{teams,dec});
+    if(gs.phase==='scores')return h(PlayerScores,{gs,myId});
+  }
+
+  if(screen==='player_join')return h(JoinScreen,{code:codeIn,setCode:setCodeIn,name:nameIn,setName:setNameIn,onJoin:joinGame,err:joinErr,loading:joining});
+
+  // Welcome
+  return h('div',{className:'pad fade'},
+    h('div',{style:{fontSize:52,marginBottom:'1rem'}},'⚡'),
+    h('h1',null,'BESS deal game'),
+    h('p',{style:{marginBottom:'.75rem'}},'You are EEM. EIS owns a 20MW/40MWh BESS in Germany. Negotiate a 15-year deal across four decisions. One scenario reveals your fate. Who beats the hurdle rate?'),
+    h('div',{className:'card',style:{marginBottom:'1.5rem'}},
+      h('span',{className:'label'},'THE ASSET'),
+      h('div',{style:{fontWeight:700,fontSize:13}},ASSET),
+      h('p',{style:{fontSize:12,marginTop:2}},`EEM internal hurdle rate: ${HURDLE}% IRR`)
+    ),
+    h('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+      h('button',{className:'btn btn-dark',onClick:createGame},'Host a game (projector) ↗'),
+      h('button',{className:'btn btn-ghost',onClick:()=>setScreen('player_join')},'Join as player (phone) ↗')
+    )
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(h(App,null));
+</script>
+</body>
+</html>
